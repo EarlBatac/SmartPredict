@@ -1,0 +1,68 @@
+[
+    {
+        "timestamp": "2026-02-24 23:10:02.086558",
+        "category": "Daily",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:10:19.922844",
+        "category": "Seasonal",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:10:29.959867",
+        "category": "Occasional",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:10:37.969229",
+        "category": "Top Selling",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:10:53.334857",
+        "category": "Daily",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:10:58.686880",
+        "category": "Seasonal",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:11:00.995008",
+        "category": "Daily",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:11:02.869284",
+        "category": "Seasonal",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:11:04.282804",
+        "category": "Occasional",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:11:05.847978",
+        "category": "Top Selling",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    },
+    {
+        "timestamp": "2026-02-24 23:11:06.859260",
+        "category": "Daily",
+        "accuracy": 75.0,
+        "model": "XGBoost Regressor"
+    }
+]
