@@ -1,18 +1,356 @@
 
-Libraries Downloaded:
-Flask 
-XGBoost
-Pandas
-NumPy
-Scikit-Learn
-Matplotlib
-Flask-CORS
 
-Libraries for frontend:
-React
-Recharts
-React-Boostrap
-Bootstrap
+# SmartPredict
 
-Use of AI:
-Used only for Brainstorming. 
+### AI-Integrated ERP Supply Chain & Demand Forecasting System
+
+*A decoupled full-stack predictive ERP dashboard that replaces static moving averages with node-specific XGBoost forecasting, EMA target denoising, and Coefficient-of-Variation supplier risk scoring.*
+**BSc (Honours) Computing Science Dissertation — University of Stirling (UAE), April 2026**
+
+---
+
+## Table of Contents
+
+1. [Executive Summary & Business Problem](#1-executive-summary--business-problem)
+2. [Key Engineering Features](#2-key-engineering-features)
+3. [System Architecture & Data Flow](#3-system-architecture--data-flow)
+4. [Dataset & ETL Pipeline](#4-dataset--etl-pipeline-preprocesspy)
+5. [Machine Learning Methodology](#5-machine-learning-methodology-apppy--model_trainingpy)
+6. [Executive Dashboard Interface](#6-executive-dashboard-interface-appjs)
+7. [Local Installation & Execution Guide](#7-local-installation--execution-guide)
+8. [Limitations & Future Roadmap](#8-limitations--future-roadmap)
+9. [Author & Acknowledgements](#9-author--acknowledgements)
+
+---
+
+## 1. Executive Summary & Business Problem
+
+Traditional Enterprise Resource Planning (ERP) systems depend on manual, rule-based processing, static historical moving averages, and "one-size-fits-all" forecasting. For electronics retailers facing rapid product evolution, this produces two critical supply chain failures, compounded by unmonitored supplier delivery delays:
+
+- **Overstocking:** capital locked up in dead stock on slow-moving items.
+- **Understocking:** micro-stockouts on high-velocity items.
+
+**SmartPredict** is a decoupled, full-stack predictive ERP web application (`Python/Flask` backend + `React.js` frontend). It replaces static averages with an automated **Nodal Demand Framework** powered by **XGBoost** (`XGBRegressor`), **Exponential Moving Average (EMA) target denoising**, and **Coefficient of Variation (CV) supplier volatility scoring**. Complex ML metrics are translated into plain-English executive recommendations.
+
+### Traditional ERP vs. SmartPredict
+
+| Dimension | Traditional ERP | SmartPredict (AI-Enabled ERP) |
+|---|---|---|
+| Forecasting method | Static historical moving averages | XGBoost regressor trained per demand node |
+| Product treatment | One-size-fits-all | Four demand nodes (Daily, Seasonal, Occasional, Top Selling), each with tailored features |
+| Noise handling | Raw daily sales, sensitive to spikes | 7-day EMA denoised target (`Target_Trend`) |
+| Accuracy reporting | Raw figures or none | WMAPE-based "Denoised Accuracy" with a plain-English justification |
+| Supplier monitoring | Manual / unmonitored delays | Automated CV-based Supplier Volatility Score (0.60–0.96) |
+| Inventory guidance | Manual report inputs | Automated action badges: `HOLD: Do Not Restock`, `OPTIMAL`, `CRITICAL` |
+| Explainability | Raw data output | Feature-weight breakdown and written AI justifications in the UI |
+
+---
+
+## 2. Key Engineering Features
+
+| Feature | What it does |
+|---|---|
+| **Nodal Demand Framework** | Classifies products into `Daily`, `Seasonal`, `Occasional` nodes (plus a `Top Selling` flag) and trains each with a node-specific feature set. |
+| **EMA Target Denoising** | Forecasts a smoothed 7-day EMA baseline (`Target_Trend`) instead of raw daily sales, addressing "lazy prediction" (copying `Lag_1`). |
+| **XGBoost 7-Day Forecasting** | Chronological 80/20 split, constrained trees (`max_depth=3`, `learning_rate=0.05`) to limit overfitting. |
+| **Leakage Mitigation** | All rolling-window features are shifted by one day (`.shift(1)`), mitigating target leakage. |
+| **WMAPE Evaluation** | Zero-safe accuracy metric suited to retail series with zero-sales days. |
+| **CV Supplier Risk Engine** | Scores supplier delivery consistency from order-to-delivery lead-time variability. |
+| **Explainable AI React Dashboard** | Login-gated SPA with three tabs: Executive Overview, AI Prediction, Supplier Analysis. |
+
+---
+
+## 3. System Architecture & Data Flow
+
+```text
+ ┌───────────────────────────────────────────────┐
+ │  RAW RELATIONAL ERP DATA (Maven Analytics)    │
+ │  Sales.csv  Products.csv  Stores.csv          │
+ │  Customers.csv         (ISO-8859-1 encoded)   │
+ └───────────────────────┬───────────────────────┘
+                         │
+                         ▼
+ ┌───────────────────────────────────────────────┐
+ │  preprocess.py   (ETL & Data Federation)      │
+ │  • Joins on ProductKey / StoreKey / CustomerKey│
+ │  • US-only + USD-only filtering               │
+ │  • Median imputation (Square Meters, dates)   │
+ │  • assign_node() demand categorisation        │
+ └───────────────────────┬───────────────────────┘
+                         │
+                         ▼
+ ┌───────────────────────────────────────────────┐
+ │  Federated_Electronics_Data.csv               │
+ │  33,767 rows × 38 columns                     │
+ └───────────┬───────────────────────┬───────────┘
+             │                       │
+             ▼                       ▼
+ ┌─────────────────────────┐  ┌──────────────────────────────────┐
+ │  model_training.py      │  │  app.py  (Flask REST API)        │
+ │  Offline validation     │  │  • load_clean_data()             │
+ │  • RMSE over 100 epochs │  │  • feature_engineering_and_      │
+ │  • Training_Progress.png│  │    training()                    │
+ │  • Feature_Importance.png│ │  • WMAPE accuracy                │
+ └─────────────────────────┘  │  • CV supplier risk scoring      │
+                              └────────────────┬─────────────────┘
+                                               │  JSON over HTTP
+                                               │  GET /api/dashboard-data?category=...
+                                               ▼
+                              ┌──────────────────────────────────┐
+                              │  App.js  (React.js SPA)          │
+                              │  http://localhost:3000           │
+                              │  Login → Overview | AI Prediction│
+                              │          | Supplier Analysis     │
+                              └──────────────────────────────────┘
+```
+
+**Repository files**
+
+| File | Role |
+|---|---|
+| `Sales.csv`, `Products.csv`, `Stores.csv`, `Customers.csv` | Raw relational ERP datasets |
+| `preprocess.py` | ETL and data federation; outputs `Federated_Electronics_Data.csv` |
+| `Federated_Electronics_Data.csv` | Core federated dataset (33,767 rows × 38 columns) ingested by the backend |
+| `model_training.py` | Offline training/validation; generates `Training_Progress.png` and `Feature_Importance.png` |
+| `app.py` | Flask REST API at `http://127.0.0.1:5000`; forecasting, WMAPE, supplier risk |
+| `App.js` | React.js SPA at `http://localhost:3000`; authentication and three dashboard tabs |
+
+---
+
+## 4. Dataset & ETL Pipeline (`preprocess.py`)
+
+**Source:** Maven Analytics [*Global Electronics Retailer*](https://mavenanalytics.io/data-playground/global-electronics-retailer) dataset.
+
+### Verified dataset metrics (`Federated_Electronics_Data.csv`)
+
+| Metric | Value |
+|---|---|
+| Federated transaction records (line items) | **33,767** |
+| Columns | **38** |
+| Unique orders | **14,221** |
+| Total units sold | **106,407** |
+| Time span | Jan 1, 2016 – Feb 20, 2021 (5+ years) |
+| Unique products | **2,437** |
+| Categories | **8** (`Computers`, `Cell phones`, `Music, Movies and Audio Books`, `Audio`, `Games and Toys`, `Home Appliances`, `Cameras and camcorders`, `TV and Video`) |
+| Subcategories | **32** |
+| Stores | **21** |
+| Unique customers | **5,706** |
+
+### Pipeline stages
+
+| Stage | Detail |
+|---|---|
+| **Encoding** | Files loaded with `ISO-8859-1` to preserve special characters in product descriptions and customer names. |
+| **Relational joins** | The four raw CSVs are merged on `ProductKey`, `StoreKey`, and `CustomerKey` using Pandas. |
+| **Geographic & currency filtering** | Restricted strictly to **US-based locations** and **USD** currency, removing cross-currency distortion and international shipping anomalies. |
+| **Median imputation** | **7,212 missing values** in `Square Meters` (physical store capacity; primarily online orders where `StoreKey = 0`) and missing delivery dates are filled with **systematic median imputation**. |
+| **Daily zero-filling** | `daily_df.set_index('Order Date').resample('D').sum().fillna(0).reset_index()` makes zero-sales days explicit `0` values rather than omitting them. |
+
+> **Engineering note:** an early prototype filled missing values with random generation, which introduced scripted, biased trends. It was replaced with systematic median imputation, which preserves the real statistical distribution of store sizes.
+
+---
+
+## 5. Machine Learning Methodology (`app.py` & `model_training.py`)
+
+### 5.1 Target denoising (addressing "lazy prediction")
+
+Predicting raw daily `Quantity` led the model to "lazy predict" by copying the previous day's sales (`Lag_1`) or memorizing random spikes. The target was changed to a smoothed baseline demand curve using a 7-day EMA:
+
+```python
+daily_df['Target_Trend'] = daily_df['Quantity'].ewm(span=7, adjust=False).mean()
+```
+
+All rolling-window features are shifted by one day (`.shift(1)`) to mitigate target leakage.
+
+### 5.2 Dynamic Nodal Demand Framework
+
+`preprocess.py` assigns each product a demand node through `assign_node(row)`:
+
+```python
+if product_counts < 50:         'Occasional'
+elif Is_Holiday_Season == 1:    'Seasonal'
+else:                           'Daily'
+# plus a boolean flag: Is_Top_Selling
+```
+
+Calendar features: `Month`, `DayOfWeek`, and `Is_Holiday_Season` (`Month.isin([11, 12, 6, 7]).astype(int)`, isolating Q4 and Summer surges).
+
+| Node | Records | Business purpose | Feature set |
+|---|---:|---|---|
+| **Daily** | 5,971 | Prevent micro-stockouts on high-frequency staples | `Rolling_7D`, `Rolling_3D`, `DayOfWeek`, `Month` |
+| **Seasonal** | 3,393 | Scale inventory ahead of Q4/Summer surges; stop ordering right after | `Rolling_7D`, `Is_Holiday_Season`, `Month`, `Rolling_14D` |
+| **Occasional** | 24,403 | Prevent dead stock on slow-moving, high-cost items with frequent zero-sales days | `Rolling_14D`, `Rolling_30D`, `Month`, `DayOfWeek` |
+| **Top Selling** | (flag) | Protect high-revenue items from hitting zero stock | `EMA_Lag_1`, `Rolling_7D`, `Month`, `DayOfWeek` |
+
+For the Top Selling node, `EMA_Lag_1 = daily_df['Target_Trend'].shift(1)`.
+
+*Example (Daily tab in the UI):* `Rolling_7D` 74.2%, `Rolling_3D` 22.8%, `DayOfWeek` 1.9%, `Month` 1.1%.
+
+### 5.3 XGBoost configuration & training
+
+```python
+model = xgb.XGBRegressor(
+    n_estimators=100,
+    max_depth=3,
+    learning_rate=0.05,
+    random_state=42,
+)
+```
+
+- **Chronological 80/20 split** (`split = int(len(X) * 0.8)`), no shuffling, so the model is never evaluated on the past after training on the future.
+- **Minimum-data guard:** `if len(X) < 14: return "Insufficient Data"`.
+- **Overfitting control:** `max_depth=3` and `learning_rate=0.05` constrain the trees so they do not memorize noise.
+
+**Offline validation (`model_training.py`):** uses `eval_set = [(X_train, y_train), (X_test, y_test)]` and `model.evals_result()` to track RMSE across 100 boosting rounds.
+
+| Artifact | Observation |
+|---|---|
+| `Training_Progress.png` | Training RMSE decreases smoothly from ~2.256 to ~2.232 across 100 trees. |
+| `Feature_Importance.png` | Base-model `plot_importance` F-scores: `f0 = 2148.0`, `f3 = 2054.0`, `f1 = 1388.0`, `f2 = 127.0`. |
+
+### 5.4 Evaluation metric: WMAPE accuracy
+
+Standard MAPE breaks on retail series because of division by zero on zero-sales days. SmartPredict uses **Weighted Mean Absolute Percentage Error (WMAPE)** and reports it as a *Denoised Accuracy* percentage:
+
+$$
+\text{WMAPE} = \frac{\frac{1}{n}\sum_{i=1}^{n}\left|y_i - \hat{y}_i\right|}{\bar{y}_{\text{test}}}, \qquad
+\text{Accuracy} = (1 - \text{WMAPE}) \times 100
+$$
+
+```python
+mae   = np.mean(np.abs(y_test - preds))
+wmape = mae / y_test.mean() if y_test.mean() > 0 else 1.0
+final_acc = (1 - wmape) * 100
+```
+
+**Result:** WMAPE accuracy ranged from **68.5% (lowest) to 80.6% (highest)** across nodes, against a project target of 70%–80%. The Seasonal node is the most variable when historical event samples are sparse (see [Limitations](#8-limitations--future-roadmap)).
+
+### 5.5 Supplier volatility scoring (Coefficient of Variation)
+
+Lead time is computed per order as `delivery_gap = Delivery Date − Order Date`. The Coefficient of Variation of that gap is normalized into a bounded **Supplier Volatility Score**:
+
+$$
+CV = \frac{\sigma_{\text{gap}}}{\mu_{\text{gap}}}, \qquad
+\text{Score} = \max\!\big(0.60,\ \min(0.96,\ 1 - 0.45 \cdot CV)\big)
+$$
+
+```python
+cv = std_dev / mean_gap
+supplier_score = round(max(0.60, min(0.96, 1 - (cv * 0.45))), 2)
+```
+
+A higher score indicates more consistent delivery. The dashboard pairs the score with a status badge (e.g. `Medium Risk`).
+
+---
+
+## 6. Executive Dashboard Interface (`App.js`)
+
+The React SPA fetches data asynchronously with `useEffect`, triggered on `[category, isAuthenticated]` changes:
+
+```javascript
+fetch(`http://127.0.0.1:5000/api/dashboard-data?category=${category}`)
+```
+
+State is managed with React Hooks (`useState`, `useEffect`); UI components come from React-Bootstrap, and charts are rendered with Recharts.
+
+### Login page
+An authentication gate (`isAuthenticated`) protects access to the dashboard.
+
+> 📸 *Screenshot placeholder:* `docs/screenshots/login.png`
+
+### Tab 1 — Executive Overview
+- *Product Node Clarity* definition for the selected node
+- *7-Day Demand Prediction* total units (e.g. `197 Units`)
+- Automated inventory action badges: `HOLD: Do Not Restock`, `OPTIMAL`, or `CRITICAL`
+- Itemized *Predicted Stock Requirements* (e.g. `WWI Desktop PC2.33 X2330 Black: +8 units`)
+- *Trending Product Justification*
+- Top US locations (e.g. Los Angeles, California; Houston, Texas; New Orleans, Louisiana)
+
+> 📸 *Screenshot placeholder:* `docs/screenshots/executive_overview.png`
+
+### Tab 2 — AI Prediction
+- Interactive 7-day line chart: *AI Target Prediction* vs. *Historical Validation*
+- Green *Denoised Accuracy (WMAPE)* badge (e.g. `80.6%`)
+- *Model Logic* panel showing the percentage weight of each feature of the active node
+- Plain-English *AI Accuracy Score Justification*
+
+> 📸 *Screenshot placeholders:* `docs/screenshots/ai_prediction.png`, `Training_Progress.png`, `Feature_Importance.png`
+
+### Tab 3 — Supplier Analysis
+- *Supply Provider* (e.g. `Wide World Importers US Logistics`)
+- *Calculated Volatility Score* badge (e.g. `0.8`)
+- *Supplier Performance Status* badge (e.g. `Medium Risk`)
+- Plain-English *AI Calculation* explaining average delivery days and standard-deviation variance
+
+> 📸 *Screenshot placeholder:* `docs/screenshots/supplier_analysis.png`
+
+---
+
+## 7. Local Installation & Execution Guide
+
+**Prerequisites:** Python 3.9+, Node.js 16.0+ with npm.
+
+### Backend & ML
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/EarlBatac/<your-repo-name>.git
+cd <your-repo-name>
+
+# 2. Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate          # macOS / Linux
+# venv\Scripts\activate           # Windows
+
+# 3. Install dependencies
+pip install flask flask-cors pandas numpy xgboost scikit-learn matplotlib
+
+# 4. Run the ETL pipeline (generates Federated_Electronics_Data.csv)
+python preprocess.py
+
+# 5. (Optional) Run offline training & validation
+#    Generates Training_Progress.png and Feature_Importance.png
+python model_training.py
+
+# 6. Start the Flask API on http://127.0.0.1:5000
+python app.py
+```
+
+### Frontend
+
+In a second terminal, from the React project directory:
+
+```bash
+npm install
+npm start        # serves the SPA at http://localhost:3000
+```
+
+> Keep the Flask server running while using the dashboard; the frontend calls `http://127.0.0.1:5000`.
+
+---
+
+## 8. Limitations & Future Roadmap
+
+### Current limitations
+- **Static data:** relies on historical open-source CSV files rather than a live cloud database stream.
+- **Limited external signals:** no competitor pricing or unstructured market signals.
+- **Seasonal node variance:** accuracy can fluctuate when historical event samples are sparse.
+
+### Future roadmap
+- [ ] **LSTM deep learning** — originally proposed to capture complex repetitive sequential patterns alongside XGBoost; not implemented in the current version.
+- [ ] **Live ERP integration** — expand API integrations for live database ingestion.
+- [ ] **MLOps** — continuous model training pipelines.
+
+---
+
+## 9. Author & Acknowledgements
+
+| | |
+|---|---|
+| **Author** | Earl John Gregory M. Batac |
+| **Degree** | BSc (Honours) Computing Science — University of Stirling, UAE |
+| **Supervisor** | Ms. Jimy John Mathew |
+| **LinkedIn** | [linkedin.com/in/earljohnbatac](https://linkedin.com/in/earljohnbatac) |
+| **GitHub** | [github.com/EarlBatac](https://github.com/EarlBatac) |
+
+**Acknowledgements:** thanks to my supervisor, Ms. Jimy John Mathew, for her guidance, and to colleagues at the University of Stirling Ras Al Khaimah campus for their feedback and encouragement. Dataset courtesy of [Maven Analytics](https://mavenanalytics.io/data-playground/global-electronics-retailer).
